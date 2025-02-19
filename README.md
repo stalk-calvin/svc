@@ -8,12 +8,9 @@ The Audit Service is a Spring Boot application designed to monitor and log chang
 - [Produce test messages in Kafka](#produce-test-messages-in-kafka)
 - [Audit Message Format](#audit-message-format)
 - [Schema Design](#schema-design)
-- [APIs for Audit Logs](#apis-for-audit-logs)
+- [API Design](#api-design)
 - [Audit Log Rotation](#audit-log-rotation)
-- [Safeguards Against Tampering](#safeguards-against-tampering)
-- [Deployment](#deployment)
-- [Scalability Considerations](#scalability-considerations)
-- [Cross-Platform Deployment](#cross-platform-deployment)
+- [Deployment & Scalability Considerations](#deployment-and-scalability-considerations)
 
 ## Getting Started
 
@@ -53,14 +50,52 @@ Audit messages should adhere to the following JSON structure:
 }
 ```
 
-## Schema Design
+### Sample message
+
+```json
+{
+  "eventId": "abc123",
+  "eventType": "update",
+  "serviceName": "user-service",
+  "timestamp": "2025-02-18T10:00:00Z",
+  "userId": "user123",
+  "entity": "UserProfile",
+  "oldValue": "{\"name\": \"Calvin\"}",
+  "newValue": "{\"name\": \"Calvin Lee\"}",
+  "action": "update"
+}
+```
+
+## Authentication && Authorization
+
+### Current Setup
+
+Authentication is currently hardcoded for simplicity.
+
+### Proposed Setup - OAuth2
+
+- OAuth2-Based Authentication
+  - To improve security, OAuth2 can be integrated with providers like ORY Hydra, Okta, or Google. Users authenticate via an IdP, which issues JWT tokens for validation in the audit service.
+
+- Authorization & Role-Based Access Control (RBAC)
+  - Admins can access all audit logs.
+  - Non-admins can access allowed (by entity name) audit logs.
+
+## DB Schema Design
 
 The Audit Service utilizes the following schema design:
 
-- **Audit Log Table**: Stores details of all audit events.
-- **Audit Log Rotated Table**: Archives older audit logs for log rotation purposes.
+### Tables:
+- **audit_log**: Stores details of all audit events. If the table grows too large, we can consider implementing partitioning or archiving strategies to maintain performance. For example, partitioning by date (e.g., monthly or yearly) or archiving older entries to a separate storage solution can prevent the main table from becoming unwieldy, similar to an LRU (Least Recently Used) strategy.
+- **user_acl**: Stores information about users: `user_id` (username), `is_admin` (boolean). This table manages access control by defining user roles and permissions.
+- **user_acl_allowed_entities**: Stores information about a user's limited access to specific entities, defining which entities a user can interact with based on their access level.
 
-## APIs for Audit Logs
+### Indexes:
+- **audit_log**: `"idx_entity" btree (entity)` — Optimizes filtering of logs based on the `entity` column, particularly for non-admin users.
+- **user_acl**: `"idx_user_id" btree (user_id)` — Helps retrieve the `user_acl_id` quickly using the `user_id` field.
+- **user_acl_allowed_entities**: `FOREIGN KEY (user_acl_id) REFERENCES user_acl(id)` — Ensures referential integrity by linking `user_acl_allowed_entities` to `user_acl`, enabling access to allowed entities for each user.
+
+## API Design
 
 This project provides APIs for creating and retrieving audit logs.
 
@@ -136,7 +171,7 @@ To manage log retention:
 - **Configurable Retention Window**: Define a window for retaining logs before rotation.
 - **Scheduled Archiving**: Use a cron job or a scheduled Spring task to archive older logs into a separate database or table.
 
-## Deployment & Scalability Considerations
+## Deployment and Scalability Considerations
 
 The application is packaged and deployed as follows:
 - **Spring Boot WAR**: The application is packaged as a WAR file to run within an existing Tomcat server.
