@@ -2,10 +2,19 @@ version: '3.7'
 services:
   audit-service:
     build: .
+    image: audit-service:latest
+    container_name: audit-service
     ports:
       - "8080:8080"
+    depends_on:
+      - kafka
+      - postgres
     environment:
-      SPRING_PROFILES_ACTIVE: prod
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/audit_db
+      SPRING_DATASOURCE_USERNAME: user
+      SPRING_DATASOURCE_PASSWORD: pass
+
 
   postgres:
     image: postgres:15
@@ -17,16 +26,20 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      - ./bin/init.sql:/docker-entrypoint-initdb.d/init.sql
 
   kafka:
     image: confluentinc/cp-kafka:7.3.0
+    container_name: kafka
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     ports:
       - "9092:9092"
+    depends_on:
+      - zookeeper
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.3.0

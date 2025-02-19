@@ -1,33 +1,46 @@
-# Step 1: Use Maven to build and run the tests
 FROM maven:3.8.4-openjdk-17 AS builder
 
 WORKDIR /app
 
-# Copy the pom.xml and install dependencies (to leverage Docker layer caching)
 COPY pom.xml .
 RUN mvn dependency:go-offline
 
-# Copy the source code into the container
 COPY src /app/src
 
-# Run tests during the build process
 RUN mvn clean test
-
-# Step 2: Package the application into a WAR file (skip tests)
 RUN mvn clean package -DskipTests
 
-RUN WAR_FILE_NAME=$(mvn help:evaluate -Dexpression=project.artifactId -q -DforceStdout)-$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout).war
+# Use Rocky Linux 8 as the base image
+FROM rockylinux:8
 
-# Step 3: Use a Tomcat base image to deploy the WAR file
-FROM tomcat:9.0-jdk17-openjdk-slim
+# Install required dependencies and Java 17 JDK
+RUN yum update -y && \
+    yum install -y java-17-openjdk-devel wget && \
+    yum clean all
 
-WORKDIR /usr/local/tomcat/webapps
+# Set environment variables correctly
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk
+ENV CATALINA_HOME=/opt/tomcat
+ENV PATH="${JAVA_HOME}/bin:${CATALINA_HOME}/bin:${PATH}"
 
-# Copy the WAR file from the builder stage into Tomcat's webapps directory
-COPY --from=builder /app/target/${WAR_FILE_NAME} /usr/local/tomcat/webapps/ROOT.war
+# Download and install Tomcat 10
+WORKDIR /opt
+RUN wget https://archive.apache.org/dist/tomcat/tomcat-10/v10.1.36/bin/apache-tomcat-10.1.36.tar.gz && \
+    tar -xvzf apache-tomcat-10.1.36.tar.gz && \
+    mv apache-tomcat-10.1.36 tomcat && \
+    rm -f apache-tomcat-10.1.36.tar.gz
 
-# Expose the default Tomcat port (8080)
+# Set permissions for Tomcat scripts
+RUN chmod +x $CATALINA_HOME/bin/*.sh
+
+WORKDIR /opt/tomcat/webapps
+
+RUN mkdir -p /var/log/audit
+
+COPY --from=builder /app/target/*.war /opt/tomcat/webapps/audit.war
+COPY --from=builder /app/src/main/resources/logback.xml /opt/tomcat/webapps/ROOT/WEB-INF/classes/logback.xml
+
 EXPOSE 8080
 
-# Start Tomcat
+# Start Tomcat server
 CMD ["catalina.sh", "run"]

@@ -3,11 +3,15 @@ package com.calvin.auditservice.service;
 import java.time.Instant;
 import java.util.List;
 
+import com.calvin.auditservice.exception.BadRequestException;
+import com.calvin.auditservice.exception.NotFoundException;
 import com.calvin.auditservice.model.AuditLog;
 import com.calvin.auditservice.model.UserAcl;
+import com.calvin.auditservice.model.UserAclAllowedEntities;
 import com.calvin.auditservice.repository.AuditLogRepository;
 import com.calvin.auditservice.repository.UserAclRepository;
 import com.google.gson.Gson;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,7 +46,7 @@ public class AuditLogService {
     public List<AuditLog> getAuditLogsByUser(String userId) {
         UserAcl userAcl = userAclRepository.findByUserId(userId);
         if (userAcl == null) {
-            throw new RuntimeException("UserAcl not found");
+            throw new NotFoundException("UserAcl not found");
         }
 
         if (userAcl.isAdmin()) {
@@ -51,7 +55,9 @@ public class AuditLogService {
 
         // Otherwise, get the list of entities the user has access to
         // Return the audit logs filtered by entities the user can access
-        List<String> accessibleEntities = userAcl.getAllowedEntities();
+        List<String> accessibleEntities = userAcl.getAllowedEntities().stream()
+                .map(UserAclAllowedEntities::getAllowedEntity)  // Extracting allowedEntity field
+                .toList();
         return auditLogRepository.findByEntityIn(accessibleEntities);
     }
 
@@ -78,8 +84,15 @@ public class AuditLogService {
         String serviceName = jsonObject.get("serviceName").getAsString();
         String userId = jsonObject.get("userId").getAsString();
         String entity = jsonObject.get("entity").getAsString();
-        String oldValue = jsonObject.has("oldValue") ? jsonObject.get("oldValue").getAsString() : null;
-        String newValue = jsonObject.has("newValue") ? jsonObject.get("newValue").getAsString() : null;
+
+        // Parse oldValue and newValue as JsonElement (can be JsonObject, JsonArray, JsonPrimitive, or JsonNull)
+        JsonElement oldValueElement = jsonObject.get("oldValue");
+        JsonElement newValueElement = jsonObject.get("newValue");
+
+        // Convert JsonElement to String (or keep as JsonElement if needed)
+        String oldValue = oldValueElement != null && !oldValueElement.isJsonNull() ? oldValueElement.toString() : null;
+        String newValue = newValueElement != null && !newValueElement.isJsonNull() ? newValueElement.toString() : null;
+
         String action = jsonObject.get("action").getAsString();
 
         return createAuditLog(eventId, eventType, serviceName, userId, entity, oldValue, newValue, action);

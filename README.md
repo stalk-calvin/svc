@@ -1,0 +1,150 @@
+# Audit Service
+
+The Audit Service is a Spring Boot application designed to monitor and log changes across various services. It listens to change notifications via Kafka and provides secure APIs for accessing audit logs.
+
+## Table of Contents
+
+- [Getting Started](#getting-started)
+- [Produce test messages in Kafka](#produce-test-messages-in-kafka)
+- [Audit Message Format](#audit-message-format)
+- [Schema Design](#schema-design)
+- [APIs for Audit Logs](#apis-for-audit-logs)
+- [Audit Log Rotation](#audit-log-rotation)
+- [Safeguards Against Tampering](#safeguards-against-tampering)
+- [Deployment](#deployment)
+- [Scalability Considerations](#scalability-considerations)
+- [Cross-Platform Deployment](#cross-platform-deployment)
+
+## Getting Started
+
+To build and run the application using Docker Compose:
+
+```bash
+docker-compose down -v; docker-compose up --build
+```
+
+This command shuts down any running containers, rebuilds the images, and starts the services defined in your docker-compose.yml file.
+
+## Produce messages in Kafka
+
+Once your Docker Compose setup is running, produce test messages to Kafka by running the following script:
+
+```bash
+./bin/produce_kafka_messages.sh
+```
+
+This script will read messages from the specified JSON file and publish them to a Kafka topic.
+
+## Audit Message Format
+
+Audit messages should adhere to the following JSON structure:
+
+```json
+{
+  "eventId": "unique-identifier",
+  "eventType": "type-of-change",
+  "serviceName": "service-name",
+  "timestamp": "ISO-8601 timestamp",
+  "userId": "user performing the action",
+  "entity": "affected entity",
+  "oldValue": "previous state",
+  "newValue": "new state",
+  "action": "create, update, delete"
+}
+```
+
+## Schema Design
+
+The Audit Service utilizes the following schema design:
+
+- **Audit Log Table**: Stores details of all audit events.
+- **Audit Log Rotated Table**: Archives older audit logs for log rotation purposes.
+
+## APIs for Audit Logs
+
+This project provides APIs for creating and retrieving audit logs.
+
+### Swagger UI
+
+You can explore and interact with the available API endpoints through the Swagger UI. This provides an interactive documentation interface.
+
+**Swagger UI URL**:
+```text
+http://localhost:8080/audit/swagger-ui.html
+```
+
+The service offers RESTful APIs to access audit logs:
+
+### 1. Retrieve Audit Logs
+APIs to view audit messages, considering two personas for viewing audit message - admin who can view all audit messages; non-admin who can view audits only for entities he/she has access (admin/non-admin controlled in user_acl table.)
+#### Endpoint: `GET /audit/v1/logs/admin-user-id`
+#### Parameters: `userId (string, required): The unique identifier of the user.`
+#### Responses:
+- **200 OK**: Returns a list of audit logs. 
+- **403 Forbidden**: User does not have permission to view these logs. 
+- **404 Not Found**: No logs found for the given userId.
+#### Example cURL Request:
+```bash
+curl -X GET "http://localhost:8080/audit/v1/logs/admin-user-id" \
+     -H "Content-Type: application/json"
+```
+### 2. Create audit log: 
+Submit a new audit log entry following the specified message format.
+#### Endpoint: `POST /audit/v1/logs`
+#### Request Body: 
+The request body must follow this JSON structure:
+```json
+{
+  "eventId": "abc123",
+  "eventType": "update",
+  "serviceName": "user-service",
+  "timestamp": "2025-02-18T10:00:00Z",
+  "userId": "user123",
+  "entity": "UserProfile",
+  "oldValue": "{\"name\": \"Calvin\"}",
+  "newValue": "{\"name\": \"Calvin Lee\"}",
+  "action": "update"
+}
+```
+#### Responses:
+- **201 Created**: Audit log created successfully.
+- **400 Bad Request**: Invalid input data.
+- **401 Unauthorized**: Authentication is required to create an audit log.
+#### Example cURL Request:
+```bash
+curl -X POST "http://localhost:8080/audit/v1/logs" \
+     -H "Content-Type: application/json" \
+     -d '{
+  "eventId": "abc123",
+  "eventType": "update",
+  "serviceName": "user-service",
+  "timestamp": "2025-02-18T10:00:00Z",
+  "userId": "user123",
+  "entity": "UserProfile",
+  "oldValue": "{\"name\": \"Calvin\"}",
+  "newValue": "{\"name\": \"Calvin Lee\"}",
+  "action": "update"
+}'
+```
+
+Note: API security is enforced using Spring Security with JWT or OAuth2 for access control.
+
+## Audit Log Rotation
+
+To manage log retention:
+
+- **Configurable Retention Window**: Define a window for retaining logs before rotation.
+- **Scheduled Archiving**: Use a cron job or a scheduled Spring task to archive older logs into a separate database or table.
+
+## Deployment & Scalability Considerations
+
+The application is packaged and deployed as follows:
+- **Spring Boot WAR**: The application is packaged as a WAR file to run within an existing Tomcat server.
+- **Tomcat**: Deploy The WAR file is deployed on a Tomcat server, which is hosted on a CentOS-based virtual machine.
+
+For handling increased load:
+- **Docker Containers**: The service is containerized using Docker, making it easier to manage, deploy, and scale.
+- **Orchestration**: Kubernetes (or a similar container orchestration tool) would be used to scale the service horizontally by managing multiple replicas and ensuring high availability.
+- **Event Streaming**:  Kafka is employed for event-driven communication, decoupling services and allowing for better scalability and fault tolerance across distributed systems.
+- **Database Optimization**: The database is optimized for horizontal scaling, ensuring it can handle large volumes of audit logs without performance degradation. This includes efficient indexing and partitioning strategies.
+- **Cloud-Agnostic**: The application is designed to be cloud-agnostic, meaning it can be deployed on various cloud platforms such as AWS, Azure, or Google Cloud, depending on your infrastructure needs.

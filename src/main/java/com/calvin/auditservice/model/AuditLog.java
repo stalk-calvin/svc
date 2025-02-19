@@ -1,22 +1,24 @@
 package com.calvin.auditservice.model;
 
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-
 import java.time.Instant;
 
 @Data
 @Builder
-@NoArgsConstructor
 @AllArgsConstructor
+@NoArgsConstructor
 @Entity
+@Table(
+        name = "audit_log",
+        indexes = {
+                @Index(name = "idx_entity", columnList = "entity")
+        }
+)
 public class AuditLog {
 
     @Id
@@ -29,7 +31,11 @@ public class AuditLog {
     private Instant timestamp;
     private String userId;
     private String entity;
+
+    @Column(name = "old_value", columnDefinition = "TEXT")
     private String oldValue;
+    @Column(name = "new_value", columnDefinition = "TEXT")
     private String newValue;
+
     private String action;
 }

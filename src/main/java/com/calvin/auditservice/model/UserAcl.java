@@ -1,32 +1,32 @@
 package com.calvin.auditservice.model;
 
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.ElementCollection;
 
 import java.util.List;
 
 @Data
-@Builder
-@NoArgsConstructor
 @AllArgsConstructor
+@NoArgsConstructor
 @Entity
+@Table(
+        name = "user_acl",
+        indexes = {
+                @Index(name = "idx_user_id", columnList = "user_id")
+        }
+)
 public class UserAcl {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @Column(name = "user_id")
     private String userId;
     private boolean isAdmin;
 
-    @ElementCollection
-    private List<String> allowedEntities;
+    @OneToMany(mappedBy = "userAcl")
+    private List<UserAclAllowedEntities> allowedEntities;
 }
