@@ -9,6 +9,7 @@ The Audit Service is a Spring Boot application designed to monitor and log chang
 - [Audit Message Format](#audit-message-format)
 - [Schema Design](#schema-design)
 - [API Design](#api-design)
+- [Testing Strategy](#testing-strategy)
 - [Audit Log Rotation](#audit-log-rotation)
 - [Deployment & Scalability Considerations](#deployment-and-scalability-considerations)
 
@@ -164,12 +165,31 @@ curl -X POST "http://localhost:8080/audit/v1/logs" \
 
 Note: API security is enforced using Spring Security with JWT or OAuth2 for access control.
 
+## Testing Strategy
+
+Our testing approach includes unit tests for business logic and integration tests for API validation.
+
+1. Unit Tests (Service Layer)
+   - Validate business logic in AuditLogService using Mockito.
+   - Test repository interactions and edge cases (e.g., missing ACLs, unauthorized access) by mocking.
+   - Process audit events from JSON (expected value).
+
+Tools: JUnit 5, Mockito, Gson
+
+3. Integration Tests (Controller Layer)
+   - Verify API behavior using MockMvc.
+   - Test authentication, log retrieval, and input validation.
+
+Tools: Spring Boot Test, MockMvc, Embedded Kafka, h2 DB
+
 ## Audit Log Rotation
 
-To manage log retention:
+To manage log retention and ensure efficient storage usage, the audit logging system supports automatic log rotation with configurable settings.
 
-- **Configurable Retention Window**: Define a window for retaining logs before rotation.
-- **Scheduled Archiving**: Use a cron job or a scheduled Spring task to archive older logs into a separate database or table.
+- **Configurable Retention Window**: Retain logs for 30 days before rotation, with a total size cap of 2GB.
+- **Size-Based Rotation**: Individual log files are capped at 100MB, preventing excessively large files.
+- **Time-Based Rotation**: Logs are rotated daily (audit-service-YYYY-MM-DD-i.log format).
+- **Storage Path**: Logs are stored in /var/log/audit/ for centralized access and management.
 
 ## Deployment and Scalability Considerations
 

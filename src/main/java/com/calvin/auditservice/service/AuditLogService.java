@@ -3,7 +3,6 @@ package com.calvin.auditservice.service;
 import java.time.Instant;
 import java.util.List;
 
-import com.calvin.auditservice.exception.BadRequestException;
 import com.calvin.auditservice.exception.NotFoundException;
 import com.calvin.auditservice.model.AuditLog;
 import com.calvin.auditservice.model.UserAcl;
@@ -13,7 +12,6 @@ import com.calvin.auditservice.repository.UserAclRepository;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -22,11 +20,10 @@ import org.springframework.stereotype.Service;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class AuditLogService {
 
     @Autowired
-    private final Gson gson;
+    private Gson gson;
     @Autowired
     private UserAclRepository userAclRepository;
 
@@ -37,8 +34,7 @@ public class AuditLogService {
     @KafkaListener(topics = "audit-events", groupId = "audit-service")
     public void processAuditEvent(String message) {
         // Parse the message (JSON)
-        AuditLog auditLog = parseAuditLog(message);
-        auditLogRepository.save(auditLog);
+        AuditLog auditLog = parseAndCreateAuditLog(message);
         log.info("Kafka Audit Event Created: {}", auditLog);
     }
 
@@ -49,6 +45,7 @@ public class AuditLogService {
             throw new NotFoundException("UserAcl not found");
         }
 
+        log.info("Is this user ( {} ) admin?: {}", userAcl.getUserId(), userAcl.isAdmin());
         if (userAcl.isAdmin()) {
             return auditLogRepository.findAll();
         }
@@ -56,13 +53,14 @@ public class AuditLogService {
         // Otherwise, get the list of entities the user has access to
         // Return the audit logs filtered by entities the user can access
         List<String> accessibleEntities = userAcl.getAllowedEntities().stream()
-                .map(UserAclAllowedEntities::getAllowedEntity)  // Extracting allowedEntity field
+                .map(UserAclAllowedEntities::getAllowedEntity)
                 .toList();
+        log.info("Filter based on these entities: {}", accessibleEntities);
         return auditLogRepository.findByEntityIn(accessibleEntities);
     }
 
-    public AuditLog createAuditLog(String eventId, String eventType, String serviceName, String userId,
-                                   String entity, String oldValue, String newValue, String action) {
+    public AuditLog saveAuditLog(String eventId, String eventType, String serviceName, String userId,
+                                 String entity, String oldValue, String newValue, String action) {
         return auditLogRepository.save(AuditLog.builder()
                 .eventId(eventId)
                 .eventType(eventType)
@@ -76,7 +74,7 @@ public class AuditLogService {
                 .build());
     }
 
-    private AuditLog parseAuditLog(String message) {
+    private AuditLog parseAndCreateAuditLog(String message) {
         JsonObject jsonObject = gson.fromJson(message, JsonObject.class);
 
         String eventId = jsonObject.get("eventId").getAsString();
@@ -95,6 +93,6 @@ public class AuditLogService {
 
         String action = jsonObject.get("action").getAsString();
 
-        return createAuditLog(eventId, eventType, serviceName, userId, entity, oldValue, newValue, action);
+        return saveAuditLog(eventId, eventType, serviceName, userId, entity, oldValue, newValue, action);
     }
 }
