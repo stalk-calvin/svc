@@ -8,5 +8,5 @@ import java.util.List;
 
 @Repository
 public interface AuditLogRepository extends JpaRepository<AuditLog, Long> {
-    List<AuditLog> findByEntityIn(List<String> entities);
+    List<AuditLog> findByEntityTypeIn(List<String> entities);
 }

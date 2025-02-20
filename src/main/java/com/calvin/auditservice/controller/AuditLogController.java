@@ -14,22 +14,27 @@ import java.util.List;
 @RestController
 @RequestMapping("/v1")
 public class AuditLogController {
+    private final AuditLogService auditService;
 
     @Autowired
-    private AuditLogService auditService;
+    public AuditLogController(AuditLogService auditService) {
+        this.auditService = auditService;
+    }
 
     @GetMapping("/logs/{userId}")
     public List<AuditLog> getAuditLogsByUserId(@PathVariable("userId") String userId) {
         if (!isAuthenticated()) {
             throw new UnauthorizedException("Authentication is required to retrieve the audit log.");
         }
+
         return auditService.getAuditLogsByUser(userId);
     }
 
     @PostMapping("/logs")
     public ResponseEntity<ApiResponse> createAuditLog(@RequestBody AuditLog auditLog) {
         // Validate input
-        if (auditLog.getEventId() == null || auditLog.getEventType() == null) {
+        if (auditLog.getEventId() == null || auditLog.getEventType() == null ||
+            auditLog.getEntityId() == null || auditLog.getEntityType() == null) {
             throw new BadRequestException("Invalid input data.");
         }
 
@@ -38,24 +43,23 @@ public class AuditLogController {
             throw new UnauthorizedException("Authentication is required to create an audit log.");
         }
 
-        // Create the audit log
-        AuditLog createdAuditLog = auditService.createAuditLog(
-                auditLog.getEventId(),
-                auditLog.getEventType(),
-                auditLog.getServiceName(),
-                auditLog.getUserId(),
-                auditLog.getEntity(),
-                auditLog.getOldValue(),
-                auditLog.getNewValue(),
-                auditLog.getAction()
+        auditService.saveAuditLog(
+            auditLog.getEventId(),
+            auditLog.getEventType(),
+            auditLog.getServiceName(),
+            auditLog.getUserId(),
+            auditLog.getEntityId(),
+            auditLog.getEntityType(),
+            auditLog.getOldValue(),
+            auditLog.getNewValue(),
+            auditLog.getAction()
         );
 
         return ResponseEntity.status(HttpStatus.CREATED).body(new ApiResponse("Audit log created successfully"));
     }
 
     private boolean isAuthenticated() {
-        // TODO: Replace with actual authentication logic
-        // Could be either JWT or OAuth
-        return true; // Simulate unauthenticated user
+        // TODO: Replace with real authentication logic
+        return true;
     }
 }

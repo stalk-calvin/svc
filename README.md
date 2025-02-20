@@ -1,17 +1,18 @@
 # Audit Service
 
-The Audit Service is a Spring Boot application designed to monitor and log changes across various services. It listens to change notifications via Kafka and provides secure APIs for accessing audit logs.
+The Audit Service is a Spring Boot application designed to monitor and log changes across various services. It listens to change notifications via Kafka and provides secure APIs for accessing audit logs. Stateless API design, event-driven architectures using Kafka.
 
 ## Table of Contents
 
 - [Getting Started](#getting-started)
 - [Produce test messages in Kafka](#produce-test-messages-in-kafka)
 - [Audit Message Format](#audit-message-format)
-- [Authentication and Authorization](#1-retrieve-audit-logs)
 - [DB Schema Design](#db-schema-design)
 - [API Design](#api-design)
-- [Testing Strategy](#testing-strategy)
+- [Authentication and Authorization](#1-retrieve-audit-logs)
+- [Audit Tampering Protection](#audit-tampering-protection)
 - [Audit Log Rotation](#audit-log-rotation)
+- [Testing Strategy](#testing-strategy)
 - [Deployment & Scalability Considerations](#deployment-and-scalability-considerations)
 
 ## Getting Started
@@ -45,10 +46,11 @@ Audit messages should adhere to the following JSON structure:
   "serviceName": "service-name",
   "timestamp": "ISO-8601 timestamp",
   "userId": "user performing the action",
-  "entity": "affected entity",
-  "oldValue": "previous state",
-  "newValue": "new state",
-  "action": "create, update, delete"
+  "entityType": "entity type (e.g., Order, User)",
+  "entityId": "entity identifier",
+  "oldValue": "previous state (JSON object)",
+  "newValue": "new state (JSON object)",
+  "action": "create/update/delete"
 }
 ```
 
@@ -61,27 +63,13 @@ Audit messages should adhere to the following JSON structure:
   "serviceName": "user-service",
   "timestamp": "2025-02-18T10:00:00Z",
   "userId": "user123",
-  "entity": "UserProfile",
+  "entityId": "user123",
+  "entityType": "UserProfile",
   "oldValue": "{\"name\": \"Calvin\"}",
   "newValue": "{\"name\": \"Calvin Lee\"}",
   "action": "update"
 }
 ```
-
-## Authentication and Authorization
-
-### Current Setup
-
-Authentication is currently hardcoded for simplicity.
-
-### Proposed Setup - OAuth2
-
-- OAuth2-Based Authentication
-  - To improve security, OAuth2 can be integrated with providers like ORY Hydra, Okta, or Google. Users authenticate via an IdP, which issues JWT tokens for validation in the audit service.
-
-- Authorization & Role-Based Access Control (RBAC)
-  - Admins can access all audit logs.
-  - Non-admins can access allowed (by entity name) audit logs.
 
 ## DB Schema Design
 
@@ -93,7 +81,7 @@ The Audit Service utilizes the following schema design:
 - **user_acl_allowed_entities**: Stores information about a user's limited access to specific entities, defining which entities a user can interact with based on their access level.
 
 ### Indexes:
-- **audit_log**: `"idx_entity" btree (entity)` — Optimizes filtering of logs based on the `entity` column, particularly for non-admin users.
+- **audit_log**: `"idx_entity_type" btree (entity_type)` — Optimizes filtering of logs based on the `entity_type` column, particularly for non-admin users.
 - **user_acl**: `"idx_user_id" btree (user_id)` — Helps retrieve the `user_acl_id` quickly using the `user_id` field.
 - **user_acl_allowed_entities**: `FOREIGN KEY (user_acl_id) REFERENCES user_acl(id)` — Ensures referential integrity by linking `user_acl_allowed_entities` to `user_acl`, enabling access to allowed entities for each user.
 
@@ -137,7 +125,8 @@ The request body must follow this JSON structure:
   "serviceName": "user-service",
   "timestamp": "2025-02-18T10:00:00Z",
   "userId": "user123",
-  "entity": "UserProfile",
+  "entityId": "user123",
+  "entityType": "UserProfile",
   "oldValue": "{\"name\": \"Calvin\"}",
   "newValue": "{\"name\": \"Calvin Lee\"}",
   "action": "update"
@@ -157,7 +146,8 @@ curl -X POST "http://localhost:8080/audit/v1/logs" \
   "serviceName": "user-service",
   "timestamp": "2025-02-18T10:00:00Z",
   "userId": "user123",
-  "entity": "UserProfile",
+  "entityId": "user123",
+  "entityType": "UserProfile",
   "oldValue": "{\"name\": \"Calvin\"}",
   "newValue": "{\"name\": \"Calvin Lee\"}",
   "action": "update"
@@ -165,6 +155,43 @@ curl -X POST "http://localhost:8080/audit/v1/logs" \
 ```
 
 Note: API security is enforced using Spring Security with JWT or OAuth2 for access control.
+
+## Authentication and Authorization
+
+### Current Setup
+
+Authentication is currently hardcoded for simplicity.
+
+### Proposed Setup - OAuth2
+
+- OAuth2-Based Authentication
+  - To improve security, OAuth2 can be integrated with providers like ORY Hydra, Okta, or Google. Users authenticate via an IdP, which issues JWT tokens for validation in the audit service.
+
+- Authorization & Role-Based Access Control (RBAC)
+  - Admins can access all audit logs.
+  - Non-admins can access allowed (by entity name) audit logs.
+
+## Audit Log Rotation
+
+To manage log retention and ensure efficient storage usage, the audit logging system supports automatic log rotation with configurable settings.
+
+- **Configurable Retention Window**: Retain logs for 30 days before rotation, with a total size cap of 2GB.
+- **Size-Based Rotation**: Individual log files are capped at 100MB, preventing excessively large files.
+- **Time-Based Rotation**: Logs are rotated daily (audit-service-YYYY-MM-DD-i.log format).
+- **Storage Path**: Logs are stored in /var/log/audit/ for centralized access and management.
+
+## Audit Tampering Protection
+
+Ensuring the integrity and immutability of audit logs is crucial to prevent unauthorized modifications or deletions. We can implement these strategies to safeguard against audit log tampering:
+
+### 1. **Write-Only Database Rules (No UPDATE/DELETE)**
+- To enforce **write-only behavior** on the `audit_log` table, **PostgreSQL rules** can be applied to block `UPDATE` and `DELETE` operations. 
+- With more recent Postgres, we could even run `REVOKE UPDATE, DELETE ON audit_log FROM PUBLIC;`
+### 2. Application-Level Guardrails
+- Ensure that the service code never calls UPDATE or DELETE on the audit_log table.
+- Implement service-level policies that enforce append-only operations.
+### 3. For higher security, store hash
+- Store hash of original audits and do an integrity check
 
 ## Testing Strategy
 
@@ -182,15 +209,6 @@ Tools: JUnit 5, Mockito, Gson
    - Test authentication, log retrieval, and input validation.
 
 Tools: Spring Boot Test, MockMvc, Embedded Kafka, h2 DB
-
-## Audit Log Rotation
-
-To manage log retention and ensure efficient storage usage, the audit logging system supports automatic log rotation with configurable settings.
-
-- **Configurable Retention Window**: Retain logs for 30 days before rotation, with a total size cap of 2GB.
-- **Size-Based Rotation**: Individual log files are capped at 100MB, preventing excessively large files.
-- **Time-Based Rotation**: Logs are rotated daily (audit-service-YYYY-MM-DD-i.log format).
-- **Storage Path**: Logs are stored in /var/log/audit/ for centralized access and management.
 
 ## Deployment and Scalability Considerations
 

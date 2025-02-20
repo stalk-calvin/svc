@@ -16,7 +16,7 @@ import java.time.Instant;
 @Table(
         name = "audit_log",
         indexes = {
-                @Index(name = "idx_entity", columnList = "entity")
+                @Index(name = "idx_entity_type", columnList = "entity_type")
         }
 )
 public class AuditLog {
@@ -30,7 +30,8 @@ public class AuditLog {
     private String serviceName;
     private Instant timestamp;
     private String userId;
-    private String entity;
+    private String entityId;
+    private String entityType;
 
     @Column(name = "old_value", columnDefinition = "TEXT")
     private String oldValue;

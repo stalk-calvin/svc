@@ -5,7 +5,8 @@
     "serviceName": "UserService",
     "timestamp": "2025-02-17T12:34:56Z",
     "userId": "johndoe123",
-    "entity": "User",
+    "entityId": "johndoe123",
+    "entityType": "User",
     "oldValue": {
       "name": "John Doe",
       "email": "johndoe@example.com"
@@ -22,7 +23,8 @@
     "serviceName": "UserService",
     "timestamp": "2025-02-17T12:40:10Z",
     "userId": "admin123",
-    "entity": "UserProfile",
+    "entityId": "admin123",
+    "entityType": "UserProfile",
     "oldValue": {
       "name": "Johnathan Doe",
       "email": "johnathan.doe@example.com"
@@ -36,7 +38,8 @@
     "serviceName": "OrderService",
     "timestamp": "2025-02-17T13:00:00Z",
     "userId": "johndoe123",
-    "entity": "Order",
+    "entityId": "order123",
+    "entityType": "Order",
     "oldValue": null,
     "newValue": {
       "orderId": "12345",
@@ -50,7 +53,8 @@
     "serviceName": "OrderService",
     "timestamp": "2025-02-17T13:05:00Z",
     "userId": "johndoe123",
-    "entity": "Order",
+    "entityId": "order234",
+    "entityType": "Order",
     "oldValue": {
       "status": "CREATED"
     },
@@ -65,7 +69,8 @@
     "serviceName": "OrderService",
     "timestamp": "2025-02-17T13:10:00Z",
     "userId": "admin123",
-    "entity": "Order",
+    "entityId": "order345",
+    "entityType": "Order",
     "oldValue": {
       "orderId": "12345",
       "status": "PROCESSING"
@@ -79,7 +84,8 @@
     "serviceName": "ProductService",
     "timestamp": "2025-02-17T13:15:00Z",
     "userId": "johndoe123",
-    "entity": "Product",
+    "entityId": "product123",
+    "entityType": "Product",
     "oldValue": null,
     "newValue": {
       "productId": "67890",
@@ -94,7 +100,8 @@
     "serviceName": "ProductService",
     "timestamp": "2025-02-17T13:20:00Z",
     "userId": "johndoe123",
-    "entity": "Product",
+    "entityId": "product234",
+    "entityType": "Product",
     "oldValue": {
       "price": 1200.00
     },
@@ -109,7 +116,8 @@
     "serviceName": "ProductService",
     "timestamp": "2025-02-17T13:25:00Z",
     "userId": "admin123",
-    "entity": "Product",
+    "entityId": "product345",
+    "entityType": "Product",
     "oldValue": {
       "productId": "67890",
       "name": "Laptop",
@@ -124,7 +132,8 @@
     "serviceName": "PaymentService",
     "timestamp": "2025-02-17T13:30:00Z",
     "userId": "johndoe123",
-    "entity": "Payment",
+    "entityId": "payment123",
+    "entityType": "Payment",
     "oldValue": null,
     "newValue": {
       "paymentId": "98765",
@@ -139,7 +148,8 @@
     "serviceName": "PaymentService",
     "timestamp": "2025-02-17T13:35:00Z",
     "userId": "johndoe123",
-    "entity": "Payment",
+    "entityId": "payment234",
+    "entityType": "Payment",
     "oldValue": {
       "status": "SUCCESS"
     },
