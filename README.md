@@ -7,13 +7,12 @@ The Audit Service is a Spring Boot application designed to monitor and log chang
 - [Getting Started](#getting-started)
 - [Produce test messages in Kafka](#produce-test-messages-in-kafka)
 - [Audit Message Format](#audit-message-format)
-- [Schema Design](#schema-design)
-- [APIs for Audit Logs](#apis-for-audit-logs)
+- [Authentication and Authorization](#1-retrieve-audit-logs)
+- [DB Schema Design](#db-schema-design)
+- [API Design](#api-design)
+- [Testing Strategy](#testing-strategy)
 - [Audit Log Rotation](#audit-log-rotation)
-- [Safeguards Against Tampering](#safeguards-against-tampering)
-- [Deployment](#deployment)
-- [Scalability Considerations](#scalability-considerations)
-- [Cross-Platform Deployment](#cross-platform-deployment)
+- [Deployment & Scalability Considerations](#deployment-and-scalability-considerations)
 
 ## Getting Started
 
@@ -53,14 +52,52 @@ Audit messages should adhere to the following JSON structure:
 }
 ```
 
-## Schema Design
+### Sample message
+
+```json
+{
+  "eventId": "abc123",
+  "eventType": "update",
+  "serviceName": "user-service",
+  "timestamp": "2025-02-18T10:00:00Z",
+  "userId": "user123",
+  "entity": "UserProfile",
+  "oldValue": "{\"name\": \"Calvin\"}",
+  "newValue": "{\"name\": \"Calvin Lee\"}",
+  "action": "update"
+}
+```
+
+## Authentication and Authorization
+
+### Current Setup
+
+Authentication is currently hardcoded for simplicity.
+
+### Proposed Setup - OAuth2
+
+- OAuth2-Based Authentication
+  - To improve security, OAuth2 can be integrated with providers like ORY Hydra, Okta, or Google. Users authenticate via an IdP, which issues JWT tokens for validation in the audit service.
+
+- Authorization & Role-Based Access Control (RBAC)
+  - Admins can access all audit logs.
+  - Non-admins can access allowed (by entity name) audit logs.
+
+## DB Schema Design
 
 The Audit Service utilizes the following schema design:
 
-- **Audit Log Table**: Stores details of all audit events.
-- **Audit Log Rotated Table**: Archives older audit logs for log rotation purposes.
+### Tables:
+- **audit_log**: Stores details of all audit events. If the table grows too large, we can consider implementing partitioning or archiving strategies to maintain performance. For example, partitioning by date (e.g., monthly or yearly) or archiving older entries to a separate storage solution can prevent the main table from becoming unwieldy, similar to an LRU (Least Recently Used) strategy.
+- **user_acl**: Stores information about users: `user_id` (username), `is_admin` (boolean). This table manages access control by defining user roles and permissions.
+- **user_acl_allowed_entities**: Stores information about a user's limited access to specific entities, defining which entities a user can interact with based on their access level.
 
-## APIs for Audit Logs
+### Indexes:
+- **audit_log**: `"idx_entity" btree (entity)` — Optimizes filtering of logs based on the `entity` column, particularly for non-admin users.
+- **user_acl**: `"idx_user_id" btree (user_id)` — Helps retrieve the `user_acl_id` quickly using the `user_id` field.
+- **user_acl_allowed_entities**: `FOREIGN KEY (user_acl_id) REFERENCES user_acl(id)` — Ensures referential integrity by linking `user_acl_allowed_entities` to `user_acl`, enabling access to allowed entities for each user.
+
+## API Design
 
 This project provides APIs for creating and retrieving audit logs.
 
@@ -129,14 +166,33 @@ curl -X POST "http://localhost:8080/audit/v1/logs" \
 
 Note: API security is enforced using Spring Security with JWT or OAuth2 for access control.
 
+## Testing Strategy
+
+Our testing approach includes unit tests for business logic and integration tests for API validation.
+
+1. Unit Tests (Service Layer)
+   - Validate business logic in AuditLogService using Mockito.
+   - Test repository interactions and edge cases (e.g., missing ACLs, unauthorized access) by mocking.
+   - Process audit events from JSON (expected value).
+
+Tools: JUnit 5, Mockito, Gson
+
+3. Integration Tests (Controller Layer)
+   - Verify API behavior using MockMvc.
+   - Test authentication, log retrieval, and input validation.
+
+Tools: Spring Boot Test, MockMvc, Embedded Kafka, h2 DB
+
 ## Audit Log Rotation
 
-To manage log retention:
+To manage log retention and ensure efficient storage usage, the audit logging system supports automatic log rotation with configurable settings.
 
-- **Configurable Retention Window**: Define a window for retaining logs before rotation.
-- **Scheduled Archiving**: Use a cron job or a scheduled Spring task to archive older logs into a separate database or table.
+- **Configurable Retention Window**: Retain logs for 30 days before rotation, with a total size cap of 2GB.
+- **Size-Based Rotation**: Individual log files are capped at 100MB, preventing excessively large files.
+- **Time-Based Rotation**: Logs are rotated daily (audit-service-YYYY-MM-DD-i.log format).
+- **Storage Path**: Logs are stored in /var/log/audit/ for centralized access and management.
 
-## Deployment & Scalability Considerations
+## Deployment and Scalability Considerations
 
 The application is packaged and deployed as follows:
 - **Spring Boot WAR**: The application is packaged as a WAR file to run within an existing Tomcat server.
